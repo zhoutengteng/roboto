@@ -36,6 +36,7 @@ int SMALL = -1;
 int minDistance = LARGE;
 int minDistanceIndex = SMALL;
 int MOTIVATION = 150;
+int lastpos = 0;
 
 
 //判断是否需要转动摄像头
@@ -85,7 +86,8 @@ void tuoji() {
     myservo.write(0);
     delay(1000);
     int pos = 0;
-    for(pos = 0; pos <= 180; pos += 10) {
+    lastpos = myservo.read();
+    for(pos = 0; pos <= 180; pos += 5) {
           PWM_Mode();
           if (distance < minDistance) {
             minDistance = distance;
@@ -94,7 +96,7 @@ void tuoji() {
           myservo.write(pos);              
           delay(15);                      
       } 
-      for(pos = 180; pos>=0; pos-=10) {            
+      for(pos = 180; pos>=0; pos-=5) {            
           PWM_Mode();
           if (distance < minDistance) {
             minDistance = distance;
@@ -104,78 +106,66 @@ void tuoji() {
           delay(15);                     
       }
       
-      if (minDistance != LARGE && minDistanceIndex != SMALL) {
+     // if (minDistance != LARGE && minDistanceIndex != SMALL) {
         isTurn = false;
         Serial.println(minDistanceIndex);
+        /*
         if (minDistanceIndex / 90 == 1) {
           myservo.write(135);
         } else {
           myservo.write(45);
         }
+        */
 
-      }
+        myservo.write(minDistanceIndex);
+
+
+    //  }
       
   } else {
      isTurn = false;
-    // 保持直走
-     run_abnormal();
      PWM_Mode();
-     if (distance <= 20) {
-         stopMoving();
-         isTooNear = true;
-     } else {
-         isTooNear = false;
-     }
      //当目标消失的时候要重新找到 后面会有检测是否需要重新定位眼睛
-     if (distance >= 200) {
-        stopMoving();
+     if (distance >= 15) {
+     //   stopMoving();
         isTooFar = true;
      } else {
+        run_abnormal();
         isTooFar = false;
-     }
-     //尝试一次微调
-     if (isTooNear == true) {
-         //通过微调转向，判断是否需要用眼睛 重新选择小车方向，通过转小车，必须要找到
-         change1();
-         PWM_Mode();
-         //当微调过后，如果距离
-         if (distance < 20) {
-             isTurn = false;
-             isTooNear = true;
-             isTooFar = false;
-         } else if (distance >= 200) {
-             isTooFar = true;
-             isTooNear = false;
-   //          isTurn = true;
-         } else {
-             isTooFar = false;
-             delay(100);
-             isTooNear = false;    
-         }
-         //能走上一会
-
      }
 
      if (isTooFar == true) {
          //通过微调转向，判断是否需要用眼睛 重新选择小车方向，通过转小车，必须要找到
-         change2();
+         //change2();
+
+          int ang = myservo.read();
+          Serial.print("ang = ");
+          Serial.print(ang);
+          Serial.print("    lastpos");
+          Serial.println(lastpos);
+          if (abs(ang - lastpos) < 20) {
+            run_abnormal();
+          }
+          if (ang > lastpos) {
+            turnLeftByAngle(30);
+           // isTurn = true;
+          }
+          if (ang < lastpos){
+            turnRightByAngle(30);
+          //  isTurn = true;
+          }
+          delay(100);
+
          PWM_Mode();
-         //当微调过后，如果距离
-         if (distance < 20) {
-             isTurn = false;
-             isTooNear = true;
-             isTooFar = false;
-         } else if (distance >= 200) {
+         if (distance >= 15) {
+             stopMoving();
              isTooNear = false;
              isTooFar = true;
- //            isTurn = true;
-         } else {
-             //isTurn = true;
+             isTurn = true;
+         }  else {
              isTooFar = false;
-             isTooNear = false;    
-             delay(100);
          }
-       
+
       
      }
  
