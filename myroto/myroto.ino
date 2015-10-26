@@ -1,0 +1,427 @@
+/* Motor Board IR Array Test
+
+   This example of the Arduno robot's motor board returns the
+   values read fron the 5 infrared sendors on the bottom of
+   the robot.
+
+*/
+// include the motor board header
+
+#include <Servo.h>
+
+
+String bar; // string for storing the informaton
+// 按顺序接上　２,3,4,5 接　in1 in2 in3 in4
+int LEFTHIGH = 2;
+int LEFTLOW = 3;
+int RIGHTLOW = 4; 
+int RIGHTHIGH = 5;
+
+int LEFTSENSOR = 40;
+int RIGHTSENSOR = 22;
+
+int URPWM = 48; // PWM Output 0－25000US，Every 50US represent 1cm
+int URTRIG=50; // PWM trigger pin
+
+unsigned int distance=0;
+uint8_t EnPwmCmd[4]={0x44,0x02,0xbb,0x01};    // distance measure command
+
+Servo myservo;  // create servo object to control a servo
+
+int potpin = 0;  // analog pin used to connect the potentiometer
+int val;    // variable to read the value from the analog pin
+
+int LARGE = 200;
+int SMALL = -1;
+int minDistance = LARGE;
+int minDistanceIndex = SMALL;
+int MOTIVATION = 150;
+
+
+//判断是否需要转动摄像头
+boolean isTurn = true;
+boolean isTooNear = false;
+boolean isTooFar = false;
+
+void setup() {
+    PWM_Mode_Setup();
+    myservo.attach(9);  // attaches the servo on pin 9 to the servo ob
+    //myservo.attach(9);  // attaches the servo on pin 9 to the servo object
+    // start serial communication
+    Serial.begin(9600);
+    // initialize the library
+     pinMode(LEFTHIGH,INPUT);
+     pinMode(LEFTLOW,INPUT);
+     pinMode(RIGHTHIGH,INPUT);
+     pinMode(RIGHTLOW,INPUT);
+    pinMode(LEFTSENSOR, INPUT);
+    pinMode(RIGHTSENSOR, INPUT);
+    myservo.write(0);
+    delay(1000); 
+   // run_abnormal_left();
+   // run_abnormal_right();
+}
+
+
+//应该将测距集成到驼机转动中
+
+void loop() {
+
+  //  readSensor123();
+    tuoji();
+
+  //run_abnormal();
+  // turnLeftByAngle(180);
+    
+
+   
+}
+
+
+
+void tuoji() {
+  if (isTurn) {
+    //当失去目标的时候要触发下
+    //应该用45角行车 
+    // 停止小车的运动， 用眼睛观察 to-do
+    stopMoving();
+    // 这里是静止时的情况
+    minDistance = LARGE;
+    minDistanceIndex = SMALL;
+    //判断行进中 是否有调整的布尔值
+    int pos = 0;
+    for(pos = 0; pos <= 180; pos += 10) {
+          PWM_Mode();
+          if (distance < minDistance) {
+            minDistance = distance;
+            minDistanceIndex = pos;
+          }
+          myservo.write(pos);              
+          delay(100);                      
+      } 
+      for(pos = 180; pos>=0; pos-=10) {            
+          PWM_Mode();
+          if (distance < minDistance) {
+            minDistance = distance;
+            minDistanceIndex = pos; 
+          }
+          myservo.write(pos);               
+          delay(100);                     
+      }
+      if (minDistance != LARGE && minDistanceIndex != SMALL) {
+        isTurn = false;
+        Serial.println(minDistanceIndex);
+        if (minDistanceIndex / 90 == 1) {
+          myservo.write(135);
+        } else {
+          myservo.write(45);
+        }
+
+      }
+      
+  } else {
+    // 保持直走
+     run_abnormal();
+     PWM_Mode();
+     if (distance <= 10) {
+         stopMoving();
+         isTooNear = true;
+     } else {
+         isTooNear = false;
+     }
+     //当目标消失的时候要重新找到 后面会有检测是否需要重新定位眼睛
+     if (distance >= 45) {
+      isTooFar = true;
+     } else {
+      isTooFar = false;
+     }
+     //尝试一次微调
+     if (isTooNear == true) {
+         //通过微调转向，判断是否需要用眼睛 重新选择小车方向，通过转小车，必须要找到
+         change1();
+         PWM_Mode();
+         //当微调过后，如果距离
+         if (distance < 10) {
+             isTurn = false;
+             isTooNear = true;
+             isTooFar = false;
+         } else if (distance >= 45) {
+             isTooFar = true;
+             isTooNear = false;
+             isTurn = true;
+         } else {
+             isTooFar = false;
+             isTooNear = false;    
+         }
+         delay(100);
+     }
+
+     if (isTooFar == true) {
+         //通过微调转向，判断是否需要用眼睛 重新选择小车方向，通过转小车，必须要找到
+         change2();
+         PWM_Mode();
+         //当微调过后，如果距离
+         if (distance < 10) {
+             isTurn = false;
+             isTooNear = true;
+             isTooFar = false;
+         } else if (distance >= 45) {
+             isTooNear = false;
+             isTooFar = true;
+             isTurn = true;
+         } else {
+             isTurn = true;
+             isTooFar = false;
+             isTooNear = false;    
+         }
+         delay(100);
+      
+     }
+ 
+    
+  }
+}
+
+
+// 先写一个未完成的change函数  主要是转变角度， 车子转一些角度，更据 眼睛的方位，来判断是往哪边转
+void change1() {
+    //摄像头左转20度，再测, 如果能行小转一下
+    int originalAngle = myservo.read();
+    boolean isCircle = true;
+    int ang = 45;
+    int canLeft = false;
+    int canRight = false;
+    while (originalAngle + ang <= 180) {
+        myservo.write(originalAngle+ang);
+        PWM_Mode();
+        if (distance >= 10) {
+             canLeft = true;
+             break;
+        }
+        delay(500);
+        ang += 45;
+    }
+    ang = 45;
+
+    while (originalAngle - ang >= 0) {
+        myservo.write(originalAngle-ang);
+        PWM_Mode();
+        if (distance >= 10) {
+            canRight = true;
+            break;
+        }
+        delay(500);
+        ang += 45;
+    }
+    
+    delay(500);
+    myservo.write(originalAngle);
+    //更具眼睛是有优先选择的
+    if (originalAngle < 100) {
+           if (canLeft) {
+             Serial.println("left");
+              //往左边稍微转一点
+              turnLeftByAngle(60);
+              return;
+          }  else if (canRight) {
+              //往右边稍微转一点
+              Serial.println("right");
+              turnRightByAngle(60);
+              return;
+          } else {
+              return;
+          }
+        
+    } else {
+         if (canRight) {
+              //往右边稍微转一点
+              Serial.println("right");
+              turnRightByAngle(60);
+              return;
+          } else if (canLeft) {
+               Serial.println("left");
+              //往左边稍微转一点
+              turnLeftByAngle(60);
+              return;
+          } else {
+              return;
+          }
+    }
+}
+
+
+
+void change2() {
+    //摄像头左转20度，再测, 如果能行小转一下
+    int originalAngle = myservo.read();
+    boolean isCircle = true;
+    int ang = 45;
+    int canLeft = false;
+    int canRight = false;
+    while (originalAngle + ang <= 180) {
+        myservo.write(originalAngle+ang);
+        PWM_Mode();
+        if (distance >= 10) {
+             canLeft = true;
+             break;
+        }
+        delay(500);
+        ang += 45;
+    }
+    ang = 45;
+
+    while (originalAngle - ang >= 0) {
+        myservo.write(originalAngle-ang);
+        PWM_Mode();
+        if (distance >= 10) {
+            canRight = true;
+            break;
+        }
+        delay(500);
+        ang += 45;
+    }
+    
+    delay(500);
+    myservo.write(originalAngle);
+    //更具眼睛是有优先选择的
+    if (originalAngle < 100) {
+          if (canRight) {
+              //往右边稍微转一点
+              Serial.println("right");
+              turnRightByAngle(60);
+              return;
+          } else if (canLeft) {
+               Serial.println("left");
+              //往左边稍微转一点
+              turnLeftByAngle(60);
+              return;
+          } else {
+              return;
+          }
+
+        
+    } else {
+           if (canLeft) {
+             Serial.println("left");
+              //往左边稍微转一点
+              turnLeftByAngle(40);
+              return;
+          }  else if (canRight) {
+              //往右边稍微转一点
+              Serial.println("right");
+              turnRightByAngle(40);
+              return;
+          } else {
+              return;
+          }
+    }
+}
+
+
+
+void readSensor123() {
+    int left = digitalRead(LEFTSENSOR);
+    int right = digitalRead(RIGHTSENSOR);
+    //Serial.print("left :");
+    //Serial.print(digitalRead(LEFTSENSOR));
+    //Serial.print(" right :");
+    //Serial.println(digitalRead(RIGHTSENSOR));
+    if (left == 0) turnRightByAngle(20);
+    if (right == 0) turnLeftByAngle(20);
+  
+}
+
+void stopMoving() {
+      analogWrite(RIGHTHIGH, 0);
+      analogWrite(RIGHTLOW, 0);
+      analogWrite(LEFTHIGH, 0);
+      analogWrite(LEFTLOW, 0);
+}
+
+void run_abnormal_left() {
+      analogWrite(LEFTHIGH,MOTIVATION);
+      analogWrite(LEFTLOW,0);
+}
+
+
+void run_abnormal_right() {
+    analogWrite(RIGHTHIGH,MOTIVATION);
+    analogWrite(RIGHTLOW,0);
+  
+}
+
+void run_abnormal() {
+   run_abnormal_left();
+   run_abnormal_right();
+}
+
+
+void turnLeft() {
+      analogWrite(RIGHTHIGH, MOTIVATION);
+      analogWrite(RIGHTLOW, 0);
+      analogWrite(LEFTHIGH, 0);
+      analogWrite(LEFTLOW, MOTIVATION);
+}
+
+void turnRight() {
+      analogWrite(RIGHTHIGH, 0);
+      analogWrite(RIGHTLOW, MOTIVATION);
+      analogWrite(LEFTHIGH, MOTIVATION);
+      analogWrite(LEFTLOW, 0);
+}
+
+
+// x = 180 => 约大于90度;
+void turnLeftByAngle(int x) {
+   turnLeft();
+   delay(x * 5);
+   run_abnormal();
+}
+
+
+
+void turnRightByAngle(int x) {
+   turnRight();
+   delay(x * 5);
+   run_abnormal();
+
+  
+}
+
+
+void PWM_Mode_Setup()
+{ 
+  pinMode(URTRIG,OUTPUT);                     // A low pull on pin COMP/TRIG
+  digitalWrite(URTRIG,HIGH);                  // Set to HIGH
+  
+  pinMode(URPWM, INPUT);                      // Sending Enable PWM mode command
+  
+  for(int i=0;i<4;i++)
+  {
+      Serial.write(EnPwmCmd[i]);
+  } 
+}
+
+
+void PWM_Mode()
+{                              // a low pull on pin COMP/TRIG  triggering a sensor reading
+    digitalWrite(URTRIG, LOW);
+    digitalWrite(URTRIG, HIGH);               // reading Pin PWM will output pulses
+     
+    unsigned long DistanceMeasured=pulseIn(URPWM,LOW);
+     
+    if(DistanceMeasured>=10200)
+    {              // the reading is invalid.
+      Serial.println("Invalid");    
+    }
+    else
+    {
+      distance=DistanceMeasured/50;           // every 50us low level stands for 1cm
+      Serial.print("Distance=");
+      Serial.print(distance);
+      Serial.println("cm");
+    }
+
+}
+ 
+
