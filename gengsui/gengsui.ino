@@ -32,17 +32,19 @@ int potpin = 0;  // analog pin used to connect the potentiometer
 int val;    // variable to read the value from the analog pin
 
 int LARGE = 1000;
-int SMALL = -1;
+int SMALL = 1000;
 int minDistance = LARGE;
 int minDistanceIndex = SMALL;
 int MOTIVATION = 150;
 int lastpos = 0;
 
+int eye = 20;
 
 //判断是否需要转动摄像头
 boolean isTurn = true;
 boolean isTooNear = false;
 boolean isTooFar = false;
+boolean isChanged = false;
 
 void setup() {
      PWM_Mode_Setup();
@@ -58,7 +60,7 @@ void setup() {
      pinMode(LEFTSENSOR, INPUT);
      pinMode(RIGHTSENSOR, INPUT);
      myservo.write(0);
-     delay(3000); 
+     delay(2000); 
 }
 
 
@@ -80,7 +82,7 @@ void tuoji() {
     // 停止小车的运动， 用眼睛观察 to-do
     stopMoving();
     // 这里是静止时的情况
-    minDistance = LARGE;
+    minDistance = 1000;
     minDistanceIndex = SMALL;
     //判断行进中 是否有调整的布尔值
     myservo.write(0);
@@ -90,25 +92,35 @@ void tuoji() {
     for(pos = 0; pos <= 180; pos += 5) {
           PWM_Mode();
           if (distance < minDistance) {
+
             minDistance = distance;
             minDistanceIndex = pos;
+          //  break;
           }
           myservo.write(pos);              
-          delay(15);                      
+          delay(50);                      
       } 
       for(pos = 180; pos>=0; pos-=5) {            
           PWM_Mode();
-          if (distance < minDistance) {
+          if (distance < minDistance) {           
             minDistance = distance;
             minDistanceIndex = pos; 
+           // break;
           }
           myservo.write(pos);               
-          delay(15);                     
+          delay(50);                     
       }
       
      // if (minDistance != LARGE && minDistanceIndex != SMALL) {
-        isTurn = false;
-        Serial.println(minDistanceIndex);
+        if (minDistance <= eye) {
+          isTurn = false;
+          delay(300);  
+          Serial.println(minDistanceIndex);
+          myservo.write(minDistanceIndex);
+          delay(200);
+        } else {
+          isTurn = true;
+        }
         /*
         if (minDistanceIndex / 90 == 1) {
           myservo.write(135);
@@ -117,59 +129,69 @@ void tuoji() {
         }
         */
 
-        myservo.write(minDistanceIndex);
+
 
 
     //  }
       
   } else {
-     isTurn = false;
-     PWM_Mode();
-     //当目标消失的时候要重新找到 后面会有检测是否需要重新定位眼睛
-     if (distance >= 15) {
-     //   stopMoving();
-        isTooFar = true;
-     } else {
-        run_abnormal();
-        isTooFar = false;
-     }
-
-     if (isTooFar == true) {
-         //通过微调转向，判断是否需要用眼睛 重新选择小车方向，通过转小车，必须要找到
-         //change2();
 
           int ang = myservo.read();
-          Serial.print("ang = ");
-          Serial.print(ang);
-          Serial.print("    lastpos");
-          Serial.println(lastpos);
-          if (abs(ang - lastpos) < 20) {
-            run_abnormal();
+          if (ang > 110) {
+                turnLeftByAngle(50);
+                isChanged = false;
+                isTurn = true;
           }
-          if (ang > lastpos) {
-            turnLeftByAngle(30);
-           // isTurn = true;
+          if (ang < 70){
+                turnRightByAngle(50);
+                isChanged = false;
+                isTurn = true;
           }
-          if (ang < lastpos){
-            turnRightByAngle(30);
-          //  isTurn = true;
+          if (ang >= 70 && ang <= 110){
+                isChanged = true;
+                run_abnormal();
+                isTurn = false;
+                delay(100);
           }
-          delay(100);
 
+      if (isChanged) {
+         isTurn = false;
          PWM_Mode();
-         if (distance >= 15) {
-             stopMoving();
-             isTooNear = false;
-             isTooFar = true;
-             isTurn = true;
-         }  else {
-             isTooFar = false;
-         }
+         Serial.println("here:");
+         //当目标消失的时候要重新找到 后面会有检测是否需要重新定位眼睛
+   
+              if (distance > eye) {
+           //   stopMoving();
+                isTooFar = true;
+               } else {
+              // run_abnormal();
+               isTooFar = false;
+               }
 
-      
-     }
- 
-    
+         if (isTooFar == true) {
+             //通过微调转向，判断是否需要用眼睛 重新选择小车方向，通过转小车，必须要找到
+            //change2();
+          
+              int ang = myservo.read();
+              Serial.print("ang = ");
+               Serial.print(ang);
+              Serial.print("    lastpos");
+              Serial.println(lastpos);
+
+              //  if (isChanged) {
+              PWM_Mode();
+              if (distance > eye) {
+                 stopMoving();
+                 isTooNear = false;
+                 isTooFar = true;
+                 isTurn = true;
+              }  else {
+                 isTooFar = false;
+                 run_abnormal();
+              }
+             //  }
+          }
+      }
   }
 }
 
